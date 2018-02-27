@@ -105,6 +105,7 @@ struct Particle
 	float2 SizeW       : SIZE;
 	float Age          : AGE;
 	uint Type          : TYPE;
+	float RotSpeed	   : ROTSPEED;
 };
   
 Particle StreamOutVS(Particle vin)
@@ -126,7 +127,7 @@ void StreamOutGS(point Particle gin[1],
 	if( gin[0].Type == PT_EMITTER )
 	{	
 		// time to emit a new particle?
-		if( gin[0].Age > 0.005f )
+		if( gin[0].Age > 0.5f )
 		{
 			float3 vRandom = RandUnitVec3(0.0f);
 			float3 vRandom2 = RandUnitVec3(0.01f);
@@ -136,9 +137,10 @@ void StreamOutGS(point Particle gin[1],
 			Particle p;
 			p.InitialPosW = gEmitPosW.xyz;
 			p.InitialVelW = vRandom2;
-			p.SizeW       = float2(3.0f, 3.0f);
+			p.SizeW       = float2(15.0f, 15.0f);
 			p.Age         = 0.0f;
 			p.Type        = PT_FLARE;
+			p.RotSpeed	  = 10.0f;
 
 			ptStream.Append(p);
 			
@@ -159,7 +161,7 @@ void StreamOutGS(point Particle gin[1],
 
 GeometryShader gsStreamOut = ConstructGSWithSO( 
 	CompileShader( gs_5_0, StreamOutGS() ), 
-	"POSITION.xyz; VELOCITY.xyz; SIZE.xy; AGE.x; TYPE.x" );
+	"POSITION.xyz; VELOCITY.xyz; SIZE.xy; AGE.x; TYPE.x; ROTSPEED.x" );
 	
 technique11 StreamOutTech
 {
@@ -186,6 +188,7 @@ struct VertexOut
 	float2 SizeW : SIZE;
 	float4 Color : COLOR;
 	uint   Type  : TYPE;
+	float  Angle : ANGLE;
 };
 
 VertexOut DrawVS(Particle vin)
@@ -203,6 +206,7 @@ VertexOut DrawVS(Particle vin)
 	
 	vout.SizeW = vin.SizeW;
 	vout.Type  = vin.Type;
+	vout.Angle = t * vin.RotSpeed;
 	
 	return vout;
 }
@@ -235,12 +239,14 @@ void DrawGS(point VertexOut gin[1],
 		//
 		float halfWidth  = 0.5f*gin[0].SizeW.x;
 		float halfHeight = 0.5f*gin[0].SizeW.y;
+		float angleSin = sin(gin[0].Angle);
+		float angleCos = cos(gin[0].Angle);
 	
 		float4 v[4];
-		v[0] = float4(gin[0].PosW + halfWidth*right - halfHeight*up, 1.0f);
-		v[1] = float4(gin[0].PosW + halfWidth*right + halfHeight*up, 1.0f);
-		v[2] = float4(gin[0].PosW - halfWidth*right - halfHeight*up, 1.0f);
-		v[3] = float4(gin[0].PosW - halfWidth*right + halfHeight*up, 1.0f);
+		v[0] = float4(gin[0].PosW + (angleSin + 135) * halfWidth*right - (angleCos + 135) * halfHeight*up, 1.0f);
+		v[1] = float4(gin[0].PosW + (angleSin + 45)  * halfWidth*right + (angleCos + 45)  * halfHeight*up, 1.0f);
+		v[2] = float4(gin[0].PosW - (angleSin + 225) * halfWidth*right - (angleCos + 225) * halfHeight*up, 1.0f);
+		v[3] = float4(gin[0].PosW - (angleSin + 315) * halfWidth*right + (angleCos + 315) * halfHeight*up, 1.0f);
 		
 		//
 		// Transform quad vertices to world space and output 
