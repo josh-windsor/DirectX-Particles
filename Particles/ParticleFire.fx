@@ -53,27 +53,27 @@ SamplerState samLinear
  
 DepthStencilState DisableDepth
 {
-    DepthEnable = FALSE;
-    DepthWriteMask = ZERO;
+	DepthEnable = FALSE;
+	DepthWriteMask = ZERO;
 };
 
 DepthStencilState NoDepthWrites
 {
-    DepthEnable = TRUE;
-    DepthWriteMask = ZERO;
+	DepthEnable = TRUE;
+	DepthWriteMask = ZERO;
 };
 
 BlendState AdditiveBlending
 {
-    AlphaToCoverageEnable = FALSE;
-    BlendEnable[0] = TRUE;
-    SrcBlend = SRC_ALPHA;
-    DestBlend = ONE;
-    BlendOp = ADD;
-    SrcBlendAlpha = ZERO;
-    DestBlendAlpha = ZERO;
-    BlendOpAlpha = ADD;
-    RenderTargetWriteMask[0] = 0x0F;
+	AlphaToCoverageEnable = FALSE;
+	BlendEnable[0] = TRUE;
+	SrcBlend = SRC_ALPHA;
+	DestBlend = ONE;
+	BlendOp = ADD;
+	SrcBlendAlpha = ZERO;
+	DestBlendAlpha = ZERO;
+	BlendOpAlpha = ADD;
+	RenderTargetWriteMask[0] = 0x0F;
 };
 
 //***********************************************
@@ -97,6 +97,7 @@ float3 RandUnitVec3(float offset)
 
 #define PT_EMITTER 0
 #define PT_FLARE 1
+#define PT_SMOKE 2
  
 struct Particle
 {
@@ -120,14 +121,14 @@ Particle StreamOutVS(Particle vin)
 // different.
 [maxvertexcount(2)]
 void StreamOutGS(point Particle gin[1], 
-                 inout PointStream<Particle> ptStream)
+				 inout PointStream<Particle> ptStream)
 {	
 	gin[0].Age += gTimeStep;
 	
 	if( gin[0].Type == PT_EMITTER )
 	{	
 		// time to emit a new particle?
-		if( gin[0].Age > 0.5f )
+		if( gin[0].Age > 0.005f )
 		{
 			float3 vRandom = RandUnitVec3(0.0f);
 			float3 vRandom2 = RandUnitVec3(0.01f);
@@ -135,12 +136,25 @@ void StreamOutGS(point Particle gin[1],
 			vRandom.z *= 0.5f;
 			
 			Particle p;
-			p.InitialPosW = gEmitPosW.xyz;
 			p.InitialVelW = vRandom2;
-			p.SizeW       = float2(15.0f, 15.0f);
 			p.Age         = 0.0f;
-			p.Type        = PT_FLARE;
-			p.RotSpeed	  = 10.0f;
+			if (vRandom2.x < 0.4)
+			{ 
+				p.SizeW = float2(3.0f, 3.0f);
+				p.Type	  =	PT_SMOKE;
+				p.InitialPosW = gEmitPosW.xyz + (vRandom * 2);
+				p.InitialPosW.y += 2.0f;
+
+			}
+			else 
+			{
+				p.SizeW = float2(2.0f, 2.0f);
+				p.InitialPosW = gEmitPosW.xyz;
+
+				p.Type    = PT_FLARE;
+			}
+
+			p.RotSpeed	  = (vRandom * 10);
 
 			ptStream.Append(p);
 			
@@ -165,17 +179,17 @@ GeometryShader gsStreamOut = ConstructGSWithSO(
 	
 technique11 StreamOutTech
 {
-    pass P0
-    {
-        SetVertexShader( CompileShader( vs_5_0, StreamOutVS() ) );
-        SetGeometryShader( gsStreamOut );
-        
-        // disable pixel shader for stream-out only
-        SetPixelShader(NULL);
-        
-        // we must also disable the depth buffer for stream-out only
-        SetDepthStencilState( DisableDepth, 0 );
-    }
+	pass P0
+	{
+		SetVertexShader( CompileShader( vs_5_0, StreamOutVS() ) );
+		SetGeometryShader( gsStreamOut );
+		
+		// disable pixel shader for stream-out only
+		SetPixelShader(NULL);
+		
+		// we must also disable the depth buffer for stream-out only
+		SetDepthStencilState( DisableDepth, 0 );
+	}
 }
 
 //***********************************************
@@ -200,8 +214,16 @@ VertexOut DrawVS(Particle vin)
 	// constant acceleration equation
 	vout.PosW = 0.5f*t*t*gAccelW + t*vin.InitialVelW + vin.InitialPosW;
 	
+	float opacity;
 	// fade color with time
-	float opacity = 1.0f - smoothstep(0.0f, 1.0f, t/1.0f);
+	if (vin.Type == PT_SMOKE)
+	{
+		opacity = 0.4f - smoothstep(0.0f, 1.0f, t / 1.0f);
+	}
+	else
+	{
+		opacity = 1.0f - smoothstep(0.0f, 1.0f, t / 1.0f);
+	}
 	vout.Color = float4(1.0f, 1.0f, 1.0f, opacity);
 	
 	vout.SizeW = vin.SizeW;
@@ -217,12 +239,13 @@ struct GeoOut
 	float4 PosH  : SV_Position;
 	float4 Color : COLOR;
 	float2 Tex   : TEXCOORD;
+	uint   Type  : TYPE;
 };
 
 // The draw GS just expands points into camera facing quads.
 [maxvertexcount(4)]
 void DrawGS(point VertexOut gin[1], 
-            inout TriangleStream<GeoOut> triStream)
+			inout TriangleStream<GeoOut> triStream)
 {	
 	// do not draw emitter particles.
 	if( gin[0].Type != PT_EMITTER )
@@ -239,14 +262,25 @@ void DrawGS(point VertexOut gin[1],
 		//
 		float halfWidth  = 0.5f*gin[0].SizeW.x;
 		float halfHeight = 0.5f*gin[0].SizeW.y;
-		float angleSin = sin(gin[0].Angle);
-		float angleCos = cos(gin[0].Angle);
-	
+
+		float sinTheta[4];
+		float cosTheta[4];
+
+		sinTheta[0] = sin(gin[0].Angle + radians(135));
+		sinTheta[1] = sin(gin[0].Angle + radians(45 ));
+		sinTheta[2] = sin(gin[0].Angle + radians(225));
+		sinTheta[3] = sin(gin[0].Angle + radians(315));
+
+		cosTheta[0] = cos(gin[0].Angle + radians(135));
+		cosTheta[1] = cos(gin[0].Angle + radians(45 ));
+		cosTheta[2] = cos(gin[0].Angle + radians(225));
+		cosTheta[3] = cos(gin[0].Angle + radians(315));
+
 		float4 v[4];
-		v[0] = float4(gin[0].PosW + (angleSin + 135) * halfWidth*right - (angleCos + 135) * halfHeight*up, 1.0f);
-		v[1] = float4(gin[0].PosW + (angleSin + 45)  * halfWidth*right + (angleCos + 45)  * halfHeight*up, 1.0f);
-		v[2] = float4(gin[0].PosW - (angleSin + 225) * halfWidth*right - (angleCos + 225) * halfHeight*up, 1.0f);
-		v[3] = float4(gin[0].PosW - (angleSin + 315) * halfWidth*right + (angleCos + 315) * halfHeight*up, 1.0f);
+		v[0] = float4(gin[0].PosW + sinTheta[0] * (halfWidth*right) + cosTheta[0] * (halfHeight*up), 1.0f);
+		v[1] = float4(gin[0].PosW + sinTheta[1] * (halfWidth*right) + cosTheta[1] * (halfHeight*up), 1.0f);
+		v[2] = float4(gin[0].PosW + sinTheta[2] * (halfWidth*right) + cosTheta[2] * (halfHeight*up), 1.0f);
+		v[3] = float4(gin[0].PosW + sinTheta[3] * (halfWidth*right) + cosTheta[3] * (halfHeight*up), 1.0f);
 		
 		//
 		// Transform quad vertices to world space and output 
@@ -259,6 +293,7 @@ void DrawGS(point VertexOut gin[1],
 			gout.PosH  = mul(v[i], gViewProj);
 			gout.Tex   = gQuadTexC[i];
 			gout.Color = gin[0].Color;
+			gout.Type  = gin[0].Type;
 			triStream.Append(gout);
 			
 		}	
@@ -267,18 +302,20 @@ void DrawGS(point VertexOut gin[1],
 
 float4 DrawPS(GeoOut pin) : SV_TARGET
 {
-	return gTexArray.Sample(samLinear, float3(pin.Tex, 0) )*pin.Color;
+	
+	return gTexArray.Sample(samLinear, float3(pin.Tex, pin.Type - 1) )*pin.Color;
+	//return float4(1.0,0.0,0.0,1.0);
 }
 
 technique11 DrawTech
 {
-    pass P0
-    {
-        SetVertexShader(   CompileShader( vs_5_0, DrawVS() ) );
-        SetGeometryShader( CompileShader( gs_5_0, DrawGS() ) );
-        SetPixelShader(    CompileShader( ps_5_0, DrawPS() ) );
-        
-        SetBlendState(AdditiveBlending, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
-        SetDepthStencilState( NoDepthWrites, 0 );
-    }
+	pass P0
+	{
+		SetVertexShader(   CompileShader( vs_5_0, DrawVS() ) );
+		SetGeometryShader( CompileShader( gs_5_0, DrawGS() ) );
+		SetPixelShader(    CompileShader( ps_5_0, DrawPS() ) );
+		
+		SetBlendState(AdditiveBlending, float4(0.0f, 0.0f, 0.0f, 0.0f), 0xffffffff);
+		SetDepthStencilState( NoDepthWrites, 0 );
+	}
 }

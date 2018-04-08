@@ -370,7 +370,7 @@ void Application::Render3D()
 
 	m_pRain->SetEyePos(vCamera);
 	m_pRain->SetEmitPos(vCamera);
-	//m_pRain->Draw(m_pD3DDeviceContext, matVP);
+	m_pRain->Draw(m_pD3DDeviceContext, matVP);
 
 	// restore default states.
 

@@ -76,7 +76,7 @@ void ParticleSystem::SetEmitDir(const XMFLOAT3& emitDirW)
 }
 
 void ParticleSystem::Init(ID3D11Device* device, ParticleEffect* fx, ID3D11ShaderResourceView* texArraySRV, 
-	                      ID3D11ShaderResourceView* randomTexSRV, UINT maxParticles)
+						  ID3D11ShaderResourceView* randomTexSRV, UINT maxParticles)
 {
 	mMaxParticles = maxParticles;
 
@@ -121,10 +121,10 @@ void ParticleSystem::Draw(ID3D11DeviceContext* dc, XMMATRIX& ViewProj)
 	// Set IA stage.
 	//
 	dc->IASetInputLayout(ParticleInputLayout);
-    dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
+	dc->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_POINTLIST);
 
 	UINT stride = sizeof(Particle);
-    UINT offset = 0;
+	UINT offset = 0;
 
 	// On the first pass, use the initialization VB.  Otherwise, use
 	// the VB that contains the current particle list.
@@ -141,12 +141,12 @@ void ParticleSystem::Draw(ID3D11DeviceContext* dc, XMMATRIX& ViewProj)
 	//
 	dc->SOSetTargets(1, &mStreamOutVB, &offset);
 
-    D3DX11_TECHNIQUE_DESC techDesc;
+	D3DX11_TECHNIQUE_DESC techDesc;
 	mFX->StreamOutTech->GetDesc( &techDesc );
-    for(UINT p = 0; p < techDesc.Passes; ++p)
-    {
-        mFX->StreamOutTech->GetPassByIndex( p )->Apply(0, dc);
-        
+	for(UINT p = 0; p < techDesc.Passes; ++p)
+	{
+		mFX->StreamOutTech->GetPassByIndex( p )->Apply(0, dc);
+		
 		if( mFirstRun )
 		{
 			dc->Draw(1, 0);
@@ -156,7 +156,7 @@ void ParticleSystem::Draw(ID3D11DeviceContext* dc, XMMATRIX& ViewProj)
 		{
 			dc->DrawAuto();
 		}
-    }
+	}
 
 
 
@@ -173,12 +173,12 @@ void ParticleSystem::Draw(ID3D11DeviceContext* dc, XMMATRIX& ViewProj)
 	dc->IASetVertexBuffers(0, 1, &mDrawVB, &stride, &offset);
 
 	mFX->DrawTech->GetDesc( &techDesc );
-    for(UINT p = 0; p < techDesc.Passes; ++p)
-    {
-        mFX->DrawTech->GetPassByIndex( p )->Apply(0, dc);
-        
+	for(UINT p = 0; p < techDesc.Passes; ++p)
+	{
+		mFX->DrawTech->GetPassByIndex( p )->Apply(0, dc);
+		
 		dc->DrawAuto();
-    }
+	}
 }
 
 void ParticleSystem::BuildVB(ID3D11Device* device)
@@ -187,12 +187,12 @@ void ParticleSystem::BuildVB(ID3D11Device* device)
 	// Create the buffer to kick-off the particle system.
 	//
 
-    D3D11_BUFFER_DESC vbd;
-    vbd.Usage = D3D11_USAGE_DEFAULT;
+	D3D11_BUFFER_DESC vbd;
+	vbd.Usage = D3D11_USAGE_DEFAULT;
 	vbd.ByteWidth = sizeof(Particle) * 1;
-    vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
-    vbd.CPUAccessFlags = 0;
-    vbd.MiscFlags = 0;
+	vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER;
+	vbd.CPUAccessFlags = 0;
+	vbd.MiscFlags = 0;
 	vbd.StructureByteStride = 0;
 
 	// The initial particle emitter has type 0 and age 0.  The rest
@@ -202,8 +202,8 @@ void ParticleSystem::BuildVB(ID3D11Device* device)
 	p.Age  = 0.0f;
 	p.Type = 0; 
  
-    D3D11_SUBRESOURCE_DATA vinitData;
-    vinitData.pSysMem = &p;
+	D3D11_SUBRESOURCE_DATA vinitData;
+	vinitData.pSysMem = &p;
 
 	device->CreateBuffer(&vbd, &vinitData, &mInitVB);
 	
@@ -211,8 +211,8 @@ void ParticleSystem::BuildVB(ID3D11Device* device)
 	// Create the ping-pong buffers for stream-out and drawing.
 	//
 	vbd.ByteWidth = sizeof(Particle) * mMaxParticles;
-    vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_STREAM_OUTPUT;
+	vbd.BindFlags = D3D11_BIND_VERTEX_BUFFER | D3D11_BIND_STREAM_OUTPUT;
 
-    device->CreateBuffer(&vbd, 0, &mDrawVB);
+	device->CreateBuffer(&vbd, 0, &mDrawVB);
 	device->CreateBuffer(&vbd, 0, &mStreamOutVB);
 }
